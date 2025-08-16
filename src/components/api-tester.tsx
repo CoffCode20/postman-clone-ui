@@ -87,15 +87,6 @@ export function ApiTester() {
         return;
       }
 
-      // // Ensure URL is localhost
-      // if (!parsedUrl.hostname.includes("localhost")) {
-      //   setResponse(
-      //     JSON.stringify({ error: "URL must target localhost" }, null, 2)
-      //   );
-      //   setLoading(false);
-      //   return;
-      // }
-
       const requestOptions: RequestInit = {
         method,
         headers: (() => {
@@ -129,7 +120,7 @@ export function ApiTester() {
       });
 
       const res = await fetch(proxyUrl, requestOptions);
-      const data = await res.text();
+      const data = await res.json();
 
       setResponse(
         JSON.stringify(
@@ -284,7 +275,7 @@ export function ApiTester() {
                   </SelectContent>
                 </Select>
                 <Input
-                  placeholder="Enter request URL (e.g., http://localhost:8080/api/test)"
+                  placeholder="Enter request url"
                   value={url}
                   onChange={(e) => setUrl(e.target.value)}
                   className="flex-1"
