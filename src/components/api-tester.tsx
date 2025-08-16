@@ -120,7 +120,12 @@ export function ApiTester() {
       });
 
       const res = await fetch(proxyUrl, requestOptions);
-      const data = await res.json();
+      let data: any;
+      try {
+        data = await res.json();
+      } catch {
+        data = await res.text();
+      }
 
       setResponse(
         JSON.stringify(
