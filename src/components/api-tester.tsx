@@ -66,70 +66,166 @@ export function ApiTester() {
   const [body, setBody] = useState("");
   const [history, setHistory] = useState<ApiRequest[]>([]);
 
+//   const handleSendRequest = async () => {
+//     setLoading(true);
+//     setResponse("");
+
+//     try {
+//       // Validate URL
+//       if (!url) {
+//         setResponse(JSON.stringify({ error: "URL is required" }, null, 2));
+//         setLoading(false);
+//         return;
+//       }
+
+//       let parsedUrl;
+//       try {
+//         parsedUrl = new URL(url);
+//       } catch {
+//         setResponse(JSON.stringify({ error: "Invalid URL format" }, null, 2));
+//         setLoading(false);
+//         return;
+//       }
+
+//       // Ensure URL is localhost
+//       if (!parsedUrl.hostname.includes("localhost")) {
+//         setResponse(
+//           JSON.stringify({ error: "URL must target localhost" }, null, 2)
+//         );
+//         setLoading(false);
+//         return;
+//       }
+
+//       const requestOptions: RequestInit = {
+//         method,
+//         headers: (() => {
+//           try {
+//             return headers ? JSON.parse(headers) : {};
+//           } catch {
+//             setResponse(
+//               JSON.stringify({ error: "Invalid headers JSON" }, null, 2)
+//             );
+//             setLoading(false);
+//             throw new Error("Invalid headers");
+//           }
+//         })(),
+//       };
+
+//       if (method !== "GET" && method !== "HEAD" && body) {
+//         requestOptions.body = body;
+//       }
+
+//       // Route through proxy server
+//       const proxyUrl = `http://localhost:5001${parsedUrl.pathname}${parsedUrl.search}`;
+//       requestOptions.headers = {
+//         ...requestOptions.headers,
+//         Host: parsedUrl.host, // e.g., localhost:8080
+//       };
+
+//       console.log(`Sending request to proxy: ${proxyUrl}`, {
+//         headers: requestOptions.headers,
+//         method,
+//         body: requestOptions.body,
+//       });
+
+//       const res = await fetch(proxyUrl, requestOptions);
+//       const data = await res.text();
+
+//       setResponse(
+//         JSON.stringify(
+//           {
+//             status: res.status,
+//             statusText: res.statusText,
+//             headers: Object.fromEntries(res.headers.entries()),
+//             body:
+//               data.startsWith("/{") || data.startsWith("[")
+//                 ? JSON.parse(data)
+//                 : data,
+//           },
+//           null,
+//           2
+//         )
+//       );
+
+//       // Add to history
+//       const newRequest: ApiRequest = {
+//         id: Date.now().toString(),
+//         name: `${method} ${parsedUrl.pathname}`,
+//         method,
+//         url, // Store original URL
+//         timestamp: new Date(),
+//       };
+//       setHistory((prev) => [newRequest, ...prev.slice(0, 9)]);
+//     } catch (error) {
+//       setResponse(
+//         JSON.stringify(
+//           { error: error instanceof Error ? error.message : "Unknown error" },
+//           null,
+//           2
+//         )
+//       );
+//     }
+//     setLoading(false);
+//   };
+
   const handleSendRequest = async () => {
     setLoading(true);
     setResponse("");
 
     try {
-      // Validate URL
       if (!url) {
         setResponse(JSON.stringify({ error: "URL is required" }, null, 2));
-        setLoading(false);
         return;
       }
 
-      let parsedUrl;
+      let parsedUrl: URL;
       try {
         parsedUrl = new URL(url);
       } catch {
         setResponse(JSON.stringify({ error: "Invalid URL format" }, null, 2));
-        setLoading(false);
         return;
       }
 
-      // Ensure URL is localhost
       if (!parsedUrl.hostname.includes("localhost")) {
         setResponse(
           JSON.stringify({ error: "URL must target localhost" }, null, 2)
         );
-        setLoading(false);
+        return;
+      }
+
+      let requestHeaders: Record<string, string> = {};
+      try {
+        requestHeaders = headers ? JSON.parse(headers) : {};
+      } catch {
+        setResponse(JSON.stringify({ error: "Invalid headers JSON" }, null, 2));
         return;
       }
 
       const requestOptions: RequestInit = {
         method,
-        headers: (() => {
-          try {
-            return headers ? JSON.parse(headers) : {};
-          } catch {
-            setResponse(
-              JSON.stringify({ error: "Invalid headers JSON" }, null, 2)
-            );
-            setLoading(false);
-            throw new Error("Invalid headers");
-          }
-        })(),
+        headers: {
+          ...requestHeaders,
+          "X-Target-Host": parsedUrl.host,
+          "X-Target-Protocol": parsedUrl.protocol.replace(":", ""),
+        },
       };
 
       if (method !== "GET" && method !== "HEAD" && body) {
         requestOptions.body = body;
       }
 
-      // Route through proxy server
       const proxyUrl = `http://localhost:5001${parsedUrl.pathname}${parsedUrl.search}`;
-      requestOptions.headers = {
-        ...requestOptions.headers,
-        Host: parsedUrl.host, // e.g., localhost:8080
-      };
-
-      console.log(`Sending request to proxy: ${proxyUrl}`, {
-        headers: requestOptions.headers,
-        method,
-        body: requestOptions.body,
-      });
+      console.log(`Sending request to proxy: ${proxyUrl}`, requestOptions);
 
       const res = await fetch(proxyUrl, requestOptions);
-      const data = await res.text();
+      const textData = await res.text();
+
+      let parsedBody: any;
+      try {
+        parsedBody = JSON.parse(textData);
+      } catch {
+        parsedBody = textData;
+      }
 
       setResponse(
         JSON.stringify(
@@ -137,25 +233,23 @@ export function ApiTester() {
             status: res.status,
             statusText: res.statusText,
             headers: Object.fromEntries(res.headers.entries()),
-            body:
-              data.startsWith("/{") || data.startsWith("[")
-                ? JSON.parse(data)
-                : data,
+            body: parsedBody,
           },
           null,
           2
         )
       );
 
-      // Add to history
-      const newRequest: ApiRequest = {
-        id: Date.now().toString(),
-        name: `${method} ${parsedUrl.pathname}`,
-        method,
-        url, // Store original URL
-        timestamp: new Date(),
-      };
-      setHistory((prev) => [newRequest, ...prev.slice(0, 9)]);
+      setHistory((prev) => [
+        {
+          id: Date.now().toString(),
+          name: `${method} ${parsedUrl.pathname}`,
+          method,
+          url,
+          timestamp: new Date(),
+        },
+        ...prev.slice(0, 9),
+      ]);
     } catch (error) {
       setResponse(
         JSON.stringify(
@@ -164,9 +258,11 @@ export function ApiTester() {
           2
         )
       );
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
+
 
   return (
     <div className="flex h-screen bg-background">
