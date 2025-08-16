@@ -1,11 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
-import { Textarea } from "@/components/ui/textarea";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Select,
   SelectContent,
@@ -13,17 +11,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
 import {
+  ChevronRight,
+  Clock,
+  Folder,
+  History,
   Play,
   Plus,
   Save,
-  History,
   Settings,
-  ChevronRight,
-  Folder,
-  Clock,
 } from "lucide-react";
+import { useState } from "react";
 
 interface ApiRequest {
   id: string;
@@ -57,26 +57,45 @@ const METHOD_COLORS = {
 
 export function ApiTester() {
   const [method, setMethod] = useState("GET");
-  const [url, setUrl] = useState("http://localhost:8080/api/test");
+  const [url, setUrl] = useState("");
   const [response, setResponse] = useState("");
   const [loading, setLoading] = useState(false);
   const [headers, setHeaders] = useState(
     '{\n  "Content-Type": "application/json"\n}'
   );
   const [body, setBody] = useState("");
-  const [history, setHistory] = useState<ApiRequest[]>([
-    {
-      id: "1",
-      name: "Get User Posts",
-      method: "GET",
-      url: "http://localhost:8080/api/test",
-      timestamp: new Date(Date.now() - 1000 * 60 * 5),
-    },
-  ]);
+  const [history, setHistory] = useState<ApiRequest[]>([]);
 
   const handleSendRequest = async () => {
     setLoading(true);
+    setResponse(""); // Clear previous response
+
     try {
+      // Validate URL
+      if (!url) {
+        setResponse(JSON.stringify({ error: "URL is required" }, null, 2));
+        setLoading(false);
+        return;
+      }
+
+      let parsedUrl;
+      try {
+        parsedUrl = new URL(url);
+      } catch {
+        setResponse(JSON.stringify({ error: "Invalid URL format" }, null, 2));
+        setLoading(false);
+        return;
+      }
+
+      // Ensure URL is localhost
+      if (!parsedUrl.hostname.includes("localhost")) {
+        setResponse(
+          JSON.stringify({ error: "URL must target localhost" }, null, 2)
+        );
+        setLoading(false);
+        return;
+      }
+
       const requestOptions: RequestInit = {
         method,
         headers: headers ? JSON.parse(headers) : {},
@@ -87,7 +106,6 @@ export function ApiTester() {
       }
 
       // Route through proxy server
-      const parsedUrl = new URL(url);
       const proxyUrl = `http://localhost:5001${parsedUrl.pathname}${parsedUrl.search}`;
       requestOptions.headers = {
         ...requestOptions.headers,
@@ -117,7 +135,7 @@ export function ApiTester() {
       // Add to history
       const newRequest: ApiRequest = {
         id: Date.now().toString(),
-        name: `${method} Request`,
+        name: `${method} ${parsedUrl.pathname}`,
         method,
         url, // Store original URL
         timestamp: new Date(),
@@ -135,7 +153,6 @@ export function ApiTester() {
     setLoading(false);
   };
 
-  // Rest of the component remains unchanged
   return (
     <div className="flex h-screen bg-background">
       {/* Sidebar */}
