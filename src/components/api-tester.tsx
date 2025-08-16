@@ -135,9 +135,7 @@ export function ApiTester() {
             statusText: res.statusText,
             headers: Object.fromEntries(res.headers.entries()),
             body:
-              data.startsWith("/{") || data.startsWith("[")
-                ? JSON.parse(data)
-                : data,
+              data
           },
           null,
           2
