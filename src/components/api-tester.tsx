@@ -57,9 +57,7 @@ const METHOD_COLORS = {
 
 export function ApiTester() {
   const [method, setMethod] = useState("GET");
-  const [url, setUrl] = useState(
-    "https://jsonplaceholder.typicode.com/posts/1"
-  );
+  const [url, setUrl] = useState("http://localhost:8080/api/test");
   const [response, setResponse] = useState("");
   const [loading, setLoading] = useState(false);
   const [headers, setHeaders] = useState(
@@ -71,22 +69,8 @@ export function ApiTester() {
       id: "1",
       name: "Get User Posts",
       method: "GET",
-      url: "https://jsonplaceholder.typicode.com/posts",
+      url: "http://localhost:8080/api/test",
       timestamp: new Date(Date.now() - 1000 * 60 * 5),
-    },
-    {
-      id: "2",
-      name: "Create Post",
-      method: "POST",
-      url: "https://jsonplaceholder.typicode.com/posts",
-      timestamp: new Date(Date.now() - 1000 * 60 * 15),
-    },
-    {
-      id: "3",
-      name: "Update User",
-      method: "PUT",
-      url: "https://jsonplaceholder.typicode.com/users/1",
-      timestamp: new Date(Date.now() - 1000 * 60 * 30),
     },
   ]);
 
@@ -102,7 +86,16 @@ export function ApiTester() {
         requestOptions.body = body;
       }
 
-      const res = await fetch(url, requestOptions);
+      // Route through proxy server
+      const parsedUrl = new URL(url);
+      const proxyUrl = `http://localhost:5001${parsedUrl.pathname}${parsedUrl.search}`;
+      requestOptions.headers = {
+        ...requestOptions.headers,
+        Host: parsedUrl.host, // Set original host (e.g., localhost:8080)
+      };
+
+      console.log(`Sending request to proxy: ${proxyUrl}`);
+      const res = await fetch(proxyUrl, requestOptions);
       const data = await res.text();
 
       setResponse(
@@ -126,7 +119,7 @@ export function ApiTester() {
         id: Date.now().toString(),
         name: `${method} Request`,
         method,
-        url,
+        url, // Store original URL
         timestamp: new Date(),
       };
       setHistory((prev) => [newRequest, ...prev.slice(0, 9)]);
@@ -142,11 +135,11 @@ export function ApiTester() {
     setLoading(false);
   };
 
+  // Rest of the component remains unchanged
   return (
     <div className="flex h-screen bg-background">
       {/* Sidebar */}
       <div className="w-80 bg-sidebar border-r border-sidebar-border flex flex-col">
-        {/* Header */}
         <div className="p-4 border-b border-sidebar-border">
           <div className="flex items-center gap-2 mb-4">
             <div className="w-8 h-8 bg-sidebar-primary rounded-lg flex items-center justify-center">
@@ -161,8 +154,6 @@ export function ApiTester() {
             New Request
           </Button>
         </div>
-
-        {/* Collections */}
         <div className="flex-1 overflow-hidden">
           <ScrollArea className="h-full">
             <div className="p-4">
@@ -172,7 +163,6 @@ export function ApiTester() {
                   Collections
                 </span>
               </div>
-
               <div className="space-y-1 mb-6">
                 <div className="flex items-center gap-2 p-2 rounded-md hover:bg-sidebar-accent cursor-pointer">
                   <ChevronRight className="w-3 h-3 text-muted-foreground" />
@@ -182,14 +172,12 @@ export function ApiTester() {
                   </span>
                 </div>
               </div>
-
               <div className="flex items-center gap-2 mb-3">
                 <History className="w-4 h-4 text-muted-foreground" />
                 <span className="text-sm font-medium text-sidebar-foreground">
                   History
                 </span>
               </div>
-
               <div className="space-y-1">
                 {history.map((request) => (
                   <div
@@ -226,10 +214,7 @@ export function ApiTester() {
           </ScrollArea>
         </div>
       </div>
-
-      {/* Main Content */}
       <div className="flex-1 flex flex-col">
-        {/* Top Bar */}
         <div className="h-14 border-b border-border flex items-center justify-between px-6">
           <div className="flex items-center gap-4">
             <h2 className="font-medium">Untitled Request</h2>
@@ -243,11 +228,8 @@ export function ApiTester() {
             </Button>
           </div>
         </div>
-
-        {/* Request Builder */}
         <div className="flex-1 flex">
           <div className="flex-1 flex flex-col">
-            {/* URL Bar */}
             <div className="p-6 border-b border-border">
               <div className="flex gap-2">
                 <Select value={method} onValueChange={setMethod}>
@@ -270,7 +252,7 @@ export function ApiTester() {
                   </SelectContent>
                 </Select>
                 <Input
-                  placeholder="Enter request URL"
+                  placeholder="Enter request URL (e.g., http://localhost:8080/api/test)"
                   value={url}
                   onChange={(e) => setUrl(e.target.value)}
                   className="flex-1"
@@ -284,8 +266,6 @@ export function ApiTester() {
                 </Button>
               </div>
             </div>
-
-            {/* Request Details */}
             <div className="flex-1 flex">
               <div className="w-1/2 border-r border-border">
                 <Tabs defaultValue="headers" className="h-full flex flex-col">
@@ -320,8 +300,6 @@ export function ApiTester() {
                   </div>
                 </Tabs>
               </div>
-
-              {/* Response */}
               <div className="w-1/2">
                 <div className="p-6 border-b border-border">
                   <h3 className="font-medium">Response</h3>
