@@ -57,7 +57,7 @@ const METHOD_COLORS = {
 
 export function ApiTester() {
   const [method, setMethod] = useState("GET");
-  const [url, setUrl] = useState("http://localhost:8080/api/v1/users");
+  const [url, setUrl] = useState("");
   const [response, setResponse] = useState("");
   const [loading, setLoading] = useState(false);
   const [headers, setHeaders] = useState(
@@ -71,6 +71,7 @@ export function ApiTester() {
     setResponse("");
 
     try {
+      // Validate URL
       if (!url) {
         setResponse(JSON.stringify({ error: "URL is required" }, null, 2));
         setLoading(false);
@@ -86,23 +87,23 @@ export function ApiTester() {
         return;
       }
 
+      // Ensure URL is localhost
+      if (!parsedUrl.hostname.includes("localhost")) {
+        setResponse(
+          JSON.stringify({ error: "URL must target localhost" }, null, 2)
+        );
+        setLoading(false);
+        return;
+      }
+
       const requestOptions: RequestInit = {
         method,
         headers: (() => {
           try {
-            const parsed = headers ? JSON.parse(headers) : {};
-            const headersString = JSON.stringify(parsed);
-            if (headersString.length > 4000) {
-              throw new Error("Headers size exceeds 4KB limit");
-            }
-            return parsed;
+            return headers ? JSON.parse(headers) : {};
           } catch {
             setResponse(
-              JSON.stringify(
-                { error: "Invalid headers JSON or headers too large" },
-                null,
-                2
-              )
+              JSON.stringify({ error: "Invalid headers JSON" }, null, 2)
             );
             setLoading(false);
             throw new Error("Invalid headers");
@@ -114,9 +115,8 @@ export function ApiTester() {
         requestOptions.body = body;
       }
 
-      // Use public proxy URL or local for testing
-      const proxyUrl = `https://your-proxy.vercel.app${parsedUrl.pathname}${parsedUrl.search}`;
-      // For local testing: const proxyUrl = `http://localhost:5001${parsedUrl.pathname}${parsedUrl.search}`;
+      // Route through proxy server
+      const proxyUrl = `http://localhost:5001${parsedUrl.pathname}${parsedUrl.search}`;
       requestOptions.headers = {
         ...requestOptions.headers,
         Host: parsedUrl.host, // e.g., localhost:8080
@@ -138,7 +138,7 @@ export function ApiTester() {
             statusText: res.statusText,
             headers: Object.fromEntries(res.headers.entries()),
             body:
-              data.startsWith("{") || data.startsWith("[")
+              data.startsWith("/{") || data.startsWith("[")
                 ? JSON.parse(data)
                 : data,
           },
@@ -147,28 +147,19 @@ export function ApiTester() {
         )
       );
 
+      // Add to history
       const newRequest: ApiRequest = {
         id: Date.now().toString(),
         name: `${method} ${parsedUrl.pathname}`,
         method,
-        url,
+        url, // Store original URL
         timestamp: new Date(),
       };
       setHistory((prev) => [newRequest, ...prev.slice(0, 9)]);
     } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : "Request failed";
       setResponse(
         JSON.stringify(
-          {
-            error: errorMessage.includes("net::ERR_BLOCKED_BY_CLIENT")
-              ? "Request blocked by browser. Disable ad blockers or extensions for the proxy URL."
-              : errorMessage.includes("CORS")
-              ? "CORS error: Ensure the proxy and API allow requests from https://postman-clone-ui.vercel.app"
-              : errorMessage.includes("Headers size")
-              ? "Request headers too large. Reduce header size in the Headers tab."
-              : errorMessage,
-          },
+          { error: error instanceof Error ? error.message : "Unknown error" },
           null,
           2
         )
@@ -179,6 +170,7 @@ export function ApiTester() {
 
   return (
     <div className="flex h-screen bg-background">
+      {/* Sidebar */}
       <div className="w-80 bg-sidebar border-r border-sidebar-border flex flex-col">
         <div className="p-4 border-b border-sidebar-border">
           <div className="flex items-center gap-2 mb-4">
@@ -292,7 +284,7 @@ export function ApiTester() {
                   </SelectContent>
                 </Select>
                 <Input
-                  placeholder="Enter request URL (e.g., http://localhost:8080/api/v1/users)"
+                  placeholder="Enter request URL (e.g., http://localhost:8080/api/test)"
                   value={url}
                   onChange={(e) => setUrl(e.target.value)}
                   className="flex-1"
