@@ -87,14 +87,14 @@ export function ApiTester() {
         return;
       }
 
-      // Ensure URL is localhost
-      if (!parsedUrl.hostname.includes("localhost")) {
-        setResponse(
-          JSON.stringify({ error: "URL must target localhost" }, null, 2)
-        );
-        setLoading(false);
-        return;
-      }
+      // // Ensure URL is localhost
+      // if (!parsedUrl.hostname.includes("localhost")) {
+      //   setResponse(
+      //     JSON.stringify({ error: "URL must target localhost" }, null, 2)
+      //   );
+      //   setLoading(false);
+      //   return;
+      // }
 
       const requestOptions: RequestInit = {
         method,
