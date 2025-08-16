@@ -68,7 +68,7 @@ export function ApiTester() {
 
   const handleSendRequest = async () => {
     setLoading(true);
-    setResponse(""); // Clear previous response
+    setResponse("");
 
     try {
       // Validate URL
@@ -98,7 +98,17 @@ export function ApiTester() {
 
       const requestOptions: RequestInit = {
         method,
-        headers: headers ? JSON.parse(headers) : {},
+        headers: (() => {
+          try {
+            return headers ? JSON.parse(headers) : {};
+          } catch {
+            setResponse(
+              JSON.stringify({ error: "Invalid headers JSON" }, null, 2)
+            );
+            setLoading(false);
+            throw new Error("Invalid headers");
+          }
+        })(),
       };
 
       if (method !== "GET" && method !== "HEAD" && body) {
@@ -109,10 +119,15 @@ export function ApiTester() {
       const proxyUrl = `http://localhost:5001${parsedUrl.pathname}${parsedUrl.search}`;
       requestOptions.headers = {
         ...requestOptions.headers,
-        Host: parsedUrl.host, // Set original host (e.g., localhost:8080)
+        Host: parsedUrl.host, // e.g., localhost:8080
       };
 
-      console.log(`Sending request to proxy: ${proxyUrl}`);
+      console.log(`Sending request to proxy: ${proxyUrl}`, {
+        headers: requestOptions.headers,
+        method,
+        body: requestOptions.body,
+      });
+
       const res = await fetch(proxyUrl, requestOptions);
       const data = await res.text();
 
@@ -123,7 +138,7 @@ export function ApiTester() {
             statusText: res.statusText,
             headers: Object.fromEntries(res.headers.entries()),
             body:
-              data.startsWith("{") || data.startsWith("[")
+              data.startsWith("/{") || data.startsWith("[")
                 ? JSON.parse(data)
                 : data,
           },
