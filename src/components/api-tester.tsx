@@ -119,7 +119,7 @@ export function ApiTester() {
       const proxyUrl = `http://localhost:5001${parsedUrl.pathname}${parsedUrl.search}`;
       requestOptions.headers = {
         ...requestOptions.headers,
-        Host: parsedUrl.host, // e.g., localhost:8080
+        "X-Target-Url": url, // e.g., localhost:8080
       };
 
       console.log(`Sending request to proxy: ${proxyUrl}`, {
@@ -152,7 +152,7 @@ export function ApiTester() {
         id: Date.now().toString(),
         name: `${method} ${parsedUrl.pathname}`,
         method,
-        url, // Store original URL
+        url,
         timestamp: new Date(),
       };
       setHistory((prev) => [newRequest, ...prev.slice(0, 9)]);
