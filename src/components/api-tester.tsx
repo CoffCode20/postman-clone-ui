@@ -78,7 +78,7 @@ export function ApiTester() {
         return;
       }
 
-      let parsedUrl;
+      let parsedUrl: URL;
       try {
         parsedUrl = new URL(url);
       } catch {
@@ -114,19 +114,34 @@ export function ApiTester() {
         }
       }
 
-      const proxyUrl = `http://localhost:5001${parsedUrl.pathname}${parsedUrl.search}`;
-      requestOptions.headers = {
-        ...requestOptions.headers,
-        "X-Target-Url": url,
-      };
+      // Decide whether to use proxy or not
+      let finalUrl: string;
+      const hostname = parsedUrl.hostname.toLowerCase();
 
-      console.log(`Sending request to proxy: ${proxyUrl}`, {
+      if (
+        hostname === "localhost" ||
+        hostname === "127.0.0.1" ||
+        /^192\.168\./.test(hostname) || // LAN IP
+        /^10\./.test(hostname)
+      ) {
+        // Use proxy for local targets
+        finalUrl = `http://localhost:5001${parsedUrl.pathname}${parsedUrl.search}`;
+        requestOptions.headers = {
+          ...requestOptions.headers,
+          "X-Target-Url": url,
+        };
+      } else {
+        
+        finalUrl = url;
+      }
+
+      console.log(`Sending request to: ${finalUrl}`, {
         headers: requestOptions.headers,
         method,
         body: requestOptions.body,
       });
 
-      const res = await fetch(proxyUrl, requestOptions);
+      const res = await fetch(finalUrl, requestOptions);
 
       let rawData: string;
       try {
