@@ -120,12 +120,19 @@ export function ApiTester() {
       });
 
       const res = await fetch(proxyUrl, requestOptions);
-      type ResponseData = object | string;
-      let data: ResponseData;
+
+      let rawData: string;
       try {
-        data = (await res.json() as object);
+        rawData = await res.text(); // read only once
       } catch {
-        data = await res.text();
+        rawData = "";
+      }
+
+      let data: unknown;
+      try {
+        data = JSON.parse(rawData); // try parse as JSON
+      } catch {
+        data = rawData; // fallback to string
       }
 
       setResponse(
@@ -134,8 +141,7 @@ export function ApiTester() {
             status: res.status,
             statusText: res.statusText,
             headers: Object.fromEntries(res.headers.entries()),
-            body:
-              data
+            body: data,
           },
           null,
           2
