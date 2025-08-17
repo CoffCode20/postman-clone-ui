@@ -103,7 +103,10 @@ export function ApiTester() {
       };
 
       if (method !== "GET" && method !== "HEAD" && body) {
-        requestOptions.body = body;
+      try {
+        requestOptions.body = JSON.stringify(JSON.parse(body));
+      } catch {
+        requestOptions.body = body; // fallback to raw string
       }
 
       // Route through proxy server
