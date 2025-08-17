@@ -64,6 +64,7 @@ export function ApiTester() {
     '{\n  "Content-Type": "application/json",\n  "Accept": "application/json"\n}'
   );
   const [body, setBody] = useState("");
+  const [bearerToken, setBearerToken] = useState("");
   const [history, setHistory] = useState<ApiRequest[]>([]);
 
   const handleSendRequest = async () => {
@@ -71,7 +72,6 @@ export function ApiTester() {
     setResponse("");
 
     try {
-      // Validate URL
       if (!url) {
         setResponse(JSON.stringify({ error: "URL is required" }, null, 2));
         setLoading(false);
@@ -91,7 +91,11 @@ export function ApiTester() {
         method,
         headers: (() => {
           try {
-            return headers ? JSON.parse(headers) : {};
+            const parsedHeaders = headers ? JSON.parse(headers) : {};
+            if (bearerToken) {
+              parsedHeaders.Authorization = `Bearer ${bearerToken}`;
+            }
+            return parsedHeaders;
           } catch {
             setResponse(
               JSON.stringify({ error: "Invalid headers JSON" }, null, 2)
@@ -106,15 +110,14 @@ export function ApiTester() {
         try {
           requestOptions.body = JSON.stringify(JSON.parse(body));
         } catch {
-          requestOptions.body = body; // fallback to raw string
+          requestOptions.body = body;
         }
       }
 
-      // Route through proxy server
       const proxyUrl = `http://localhost:5001${parsedUrl.pathname}${parsedUrl.search}`;
       requestOptions.headers = {
         ...requestOptions.headers,
-        "X-Target-Url": url, // e.g., localhost:8080
+        "X-Target-Url": url,
       };
 
       console.log(`Sending request to proxy: ${proxyUrl}`, {
@@ -127,16 +130,16 @@ export function ApiTester() {
 
       let rawData: string;
       try {
-        rawData = await res.text(); // read only once
+        rawData = await res.text();
       } catch {
         rawData = "";
       }
 
       let data: unknown;
       try {
-        data = JSON.parse(rawData); // try parse as JSON
+        data = JSON.parse(rawData);
       } catch {
-        data = rawData; // fallback to string
+        data = rawData;
       }
 
       setResponse(
@@ -152,7 +155,6 @@ export function ApiTester() {
         )
       );
 
-      // Add to history
       const newRequest: ApiRequest = {
         id: Date.now().toString(),
         name: `${method} ${parsedUrl.pathname}`,
@@ -175,7 +177,6 @@ export function ApiTester() {
 
   return (
     <div className="flex h-screen bg-background">
-      {/* Sidebar */}
       <div className="w-80 bg-sidebar border-r border-sidebar-border flex flex-col">
         <div className="p-4 border-b border-sidebar-border">
           <div className="flex items-center gap-2 mb-4">
@@ -191,6 +192,7 @@ export function ApiTester() {
             New Request
           </Button>
         </div>
+
         <div className="flex-1 overflow-hidden">
           <ScrollArea className="h-full">
             <div className="p-4">
@@ -200,6 +202,7 @@ export function ApiTester() {
                   Collections
                 </span>
               </div>
+
               <div className="space-y-1 mb-6">
                 <div className="flex items-center gap-2 p-2 rounded-md hover:bg-sidebar-accent cursor-pointer">
                   <ChevronRight className="w-3 h-3 text-muted-foreground" />
@@ -209,12 +212,14 @@ export function ApiTester() {
                   </span>
                 </div>
               </div>
+
               <div className="flex items-center gap-2 mb-3">
                 <History className="w-4 h-4 text-muted-foreground" />
                 <span className="text-sm font-medium text-sidebar-foreground">
                   History
                 </span>
               </div>
+
               <div className="space-y-1">
                 {history.map((request) => (
                   <div
@@ -251,6 +256,7 @@ export function ApiTester() {
           </ScrollArea>
         </div>
       </div>
+
       <div className="flex-1 flex flex-col">
         <div className="h-14 border-b border-border flex items-center justify-between px-6">
           <div className="flex items-center gap-4">
@@ -265,6 +271,7 @@ export function ApiTester() {
             </Button>
           </div>
         </div>
+
         <div className="flex-1 flex">
           <div className="flex-1 flex flex-col">
             <div className="p-6 border-b border-border">
@@ -302,7 +309,17 @@ export function ApiTester() {
                   {loading ? "Sending..." : "Send"}
                 </Button>
               </div>
+              <div className="mt-4">
+                <Input
+                  placeholder="Bearer token (optional)"
+                  value={bearerToken}
+                  onChange={(e) => setBearerToken(e.target.value)}
+                  type="password"
+                  className="w-full"
+                />
+              </div>
             </div>
+
             <div className="flex-1 flex">
               <div className="w-1/2 border-r border-border">
                 <Tabs defaultValue="headers" className="h-full flex flex-col">
@@ -337,6 +354,7 @@ export function ApiTester() {
                   </div>
                 </Tabs>
               </div>
+
               <div className="w-1/2">
                 <div className="p-6 border-b border-border">
                   <h3 className="font-medium">Response</h3>
