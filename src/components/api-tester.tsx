@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import {
   ChevronRight,
   Clock,
@@ -22,6 +23,7 @@ import {
   Plus,
   Save,
   Settings,
+  Trash2,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -31,6 +33,13 @@ interface ApiRequest {
   method: string;
   url: string;
   timestamp: Date;
+}
+
+interface FormDataEntry {
+  id: string;
+  key: string;
+  value: string;
+  type: "text" | "file";
 }
 
 const HTTP_METHODS = [
@@ -64,8 +73,71 @@ export function ApiTester() {
     '{\n  "Content-Type": "application/json",\n  "Accept": "application/json"\n}'
   );
   const [body, setBody] = useState("");
+
+  const [authType, setAuthType] = useState<
+    "none" | "bearer" | "basic" | "apikey"
+  >("none");
   const [bearerToken, setBearerToken] = useState("");
+  const [basicUsername, setBasicUsername] = useState("");
+  const [basicPassword, setBasicPassword] = useState("");
+  const [apiKeyKey, setApiKeyKey] = useState("");
+  const [apiKeyValue, setApiKeyValue] = useState("");
+  const [apiKeyLocation, setApiKeyLocation] = useState<"header" | "query">(
+    "header"
+  );
+
+  const [bodyType, setBodyType] = useState<
+    "none" | "raw" | "form-data" | "x-www-form-urlencoded"
+  >("none");
+  const [formData, setFormData] = useState<FormDataEntry[]>([
+    { id: "1", key: "", value: "", type: "text" },
+  ]);
+  const [urlEncodedData, setUrlEncodedData] = useState<FormDataEntry[]>([
+    { id: "1", key: "", value: "", type: "text" },
+  ]);
+
   const [history, setHistory] = useState<ApiRequest[]>([]);
+
+  const addFormDataEntry = (isUrlEncoded = false) => {
+    const newEntry: FormDataEntry = {
+      id: Date.now().toString(),
+      key: "",
+      value: "",
+      type: "text",
+    };
+
+    if (isUrlEncoded) {
+      setUrlEncodedData((prev) => [...prev, newEntry]);
+    } else {
+      setFormData((prev) => [...prev, newEntry]);
+    }
+  };
+
+  const removeFormDataEntry = (id: string, isUrlEncoded = false) => {
+    if (isUrlEncoded) {
+      setUrlEncodedData((prev) => prev.filter((entry) => entry.id !== id));
+    } else {
+      setFormData((prev) => prev.filter((entry) => entry.id !== id));
+    }
+  };
+
+  const updateFormDataEntry = (
+    id: string,
+    field: keyof FormDataEntry,
+    value: string,
+    isUrlEncoded = false
+  ) => {
+    const updateFn = (prev: FormDataEntry[]) =>
+      prev.map((entry) =>
+        entry.id === id ? { ...entry, [field]: value } : entry
+      );
+
+    if (isUrlEncoded) {
+      setUrlEncodedData(updateFn);
+    } else {
+      setFormData(updateFn);
+    }
+  };
 
   const handleSendRequest = async () => {
     setLoading(true);
@@ -92,9 +164,26 @@ export function ApiTester() {
         headers: (() => {
           try {
             const parsedHeaders = headers ? JSON.parse(headers) : {};
-            if (bearerToken) {
-              parsedHeaders.Authorization = `Bearer ${bearerToken}`;
+
+            switch (authType) {
+              case "bearer":
+                if (bearerToken) {
+                  parsedHeaders.Authorization = `Bearer ${bearerToken}`;
+                }
+                break;
+              case "basic":
+                if (basicUsername && basicPassword) {
+                  const credentials = btoa(`${basicUsername}:${basicPassword}`);
+                  parsedHeaders.Authorization = `Basic ${credentials}`;
+                }
+                break;
+              case "apikey":
+                if (apiKeyKey && apiKeyValue && apiKeyLocation === "header") {
+                  parsedHeaders[apiKeyKey] = apiKeyValue;
+                }
+                break;
             }
+
             return parsedHeaders;
           } catch {
             setResponse(
@@ -106,16 +195,55 @@ export function ApiTester() {
         })(),
       };
 
-      if (method !== "GET" && method !== "HEAD" && body) {
-        try {
-          requestOptions.body = JSON.stringify(JSON.parse(body));
-        } catch {
-          requestOptions.body = body;
+      if (method !== "GET" && method !== "HEAD") {
+        switch (bodyType) {
+          case "raw":
+            if (body) {
+              try {
+                requestOptions.body = JSON.stringify(JSON.parse(body));
+              } catch {
+                requestOptions.body = body;
+              }
+            }
+            break;
+          case "form-data":
+            const formDataBody = new FormData();
+            formData.forEach((entry) => {
+              if (entry.key && entry.value) {
+                formDataBody.append(entry.key, entry.value);
+              }
+            });
+            requestOptions.body = formDataBody;
+            // Remove content-type header to let browser set it with boundary
+            delete (requestOptions.headers as any)["Content-Type"];
+            break;
+          case "x-www-form-urlencoded":
+            const urlEncodedBody = new URLSearchParams();
+            urlEncodedData.forEach((entry) => {
+              if (entry.key && entry.value) {
+                urlEncodedBody.append(entry.key, entry.value);
+              }
+            });
+            requestOptions.body = urlEncodedBody.toString();
+            (requestOptions.headers as any)["Content-Type"] =
+              "application/x-www-form-urlencoded";
+            break;
         }
       }
 
+      let finalUrl = url;
+      if (
+        authType === "apikey" &&
+        apiKeyLocation === "query" &&
+        apiKeyKey &&
+        apiKeyValue
+      ) {
+        const urlObj = new URL(url);
+        urlObj.searchParams.set(apiKeyKey, apiKeyValue);
+        finalUrl = urlObj.toString();
+      }
+
       // Decide whether to use proxy or not
-      let finalUrl: string;
       const hostname = parsedUrl.hostname.toLowerCase();
 
       if (
@@ -130,9 +258,6 @@ export function ApiTester() {
           ...requestOptions.headers,
           "X-Target-Url": url,
         };
-      } else {
-        
-        finalUrl = url;
       }
 
       console.log(`Sending request to: ${finalUrl}`, {
@@ -202,31 +327,11 @@ export function ApiTester() {
               API Tester
             </h1>
           </div>
-          <Button className="w-full" size="sm">
-            <Plus className="w-4 h-4 mr-2" />
-            New Request
-          </Button>
         </div>
 
         <div className="flex-1 overflow-hidden">
           <ScrollArea className="h-full">
             <div className="p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <Folder className="w-4 h-4 text-muted-foreground" />
-                <span className="text-sm font-medium text-sidebar-foreground">
-                  Collections
-                </span>
-              </div>
-
-              <div className="space-y-1 mb-6">
-                <div className="flex items-center gap-2 p-2 rounded-md hover:bg-sidebar-accent cursor-pointer">
-                  <ChevronRight className="w-3 h-3 text-muted-foreground" />
-                  <Folder className="w-4 h-4 text-muted-foreground" />
-                  <span className="text-sm text-sidebar-foreground">
-                    My Workspace
-                  </span>
-                </div>
-              </div>
 
               <div className="flex items-center gap-2 mb-3">
                 <History className="w-4 h-4 text-muted-foreground" />
@@ -275,7 +380,7 @@ export function ApiTester() {
       <div className="flex-1 flex flex-col">
         <div className="h-14 border-b border-border flex items-center justify-between px-6">
           <div className="flex items-center gap-4">
-            <h2 className="font-medium">Untitled Request</h2>
+            <h2 className="font-medium">Request Area</h2>
           </div>
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm">
@@ -324,26 +429,18 @@ export function ApiTester() {
                   {loading ? "Sending..." : "Send"}
                 </Button>
               </div>
-              <div className="mt-4">
-                <Input
-                  placeholder="Bearer token (optional)"
-                  value={bearerToken}
-                  onChange={(e) => setBearerToken(e.target.value)}
-                  type="password"
-                  className="w-full"
-                />
-              </div>
             </div>
 
             <div className="flex-1 flex">
               <div className="w-1/2 border-r border-border">
                 <Tabs defaultValue="headers" className="h-full flex flex-col">
-                  <TabsList className="grid w-full grid-cols-3 mx-6 mt-4">
+                  <TabsList className="grid w-full grid-cols-4 mx-6 mt-4">
                     <TabsTrigger value="headers">Headers</TabsTrigger>
+                    <TabsTrigger value="auth">Auth</TabsTrigger>
                     <TabsTrigger value="body">Body</TabsTrigger>
                     <TabsTrigger value="params">Params</TabsTrigger>
                   </TabsList>
-                  <div className="flex-1 p-6">
+                  <div className="flex-1 p-6 overflow-auto">
                     <TabsContent value="headers" className="h-full mt-0">
                       <Textarea
                         placeholder="Enter headers as JSON"
@@ -352,14 +449,269 @@ export function ApiTester() {
                         className="h-full resize-none font-mono text-sm"
                       />
                     </TabsContent>
-                    <TabsContent value="body" className="h-full mt-0">
-                      <Textarea
-                        placeholder="Enter request body"
-                        value={body}
-                        onChange={(e) => setBody(e.target.value)}
-                        className="h-full resize-none font-mono text-sm"
-                      />
+
+                    <TabsContent value="auth" className="mt-0 space-y-4">
+                      <div>
+                        <Label htmlFor="auth-type">Authorization Type</Label>
+                        <Select
+                          value={authType}
+                          onValueChange={(value: any) => setAuthType(value)}
+                        >
+                          <SelectTrigger className="w-full mt-1">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">No Auth</SelectItem>
+                            <SelectItem value="bearer">Bearer Token</SelectItem>
+                            <SelectItem value="basic">Basic Auth</SelectItem>
+                            <SelectItem value="apikey">API Key</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {authType === "bearer" && (
+                        <div>
+                          <Label htmlFor="bearer-token">Bearer Token</Label>
+                          <Input
+                            id="bearer-token"
+                            placeholder="Enter bearer token"
+                            value={bearerToken}
+                            onChange={(e) => setBearerToken(e.target.value)}
+                            type="password"
+                            className="mt-1"
+                          />
+                        </div>
+                      )}
+
+                      {authType === "basic" && (
+                        <div className="space-y-3">
+                          <div>
+                            <Label htmlFor="basic-username">Username</Label>
+                            <Input
+                              id="basic-username"
+                              placeholder="Enter username"
+                              value={basicUsername}
+                              onChange={(e) => setBasicUsername(e.target.value)}
+                              className="mt-1"
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor="basic-password">Password</Label>
+                            <Input
+                              id="basic-password"
+                              placeholder="Enter password"
+                              value={basicPassword}
+                              onChange={(e) => setBasicPassword(e.target.value)}
+                              type="password"
+                              className="mt-1"
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      {authType === "apikey" && (
+                        <div className="space-y-3">
+                          <div>
+                            <Label htmlFor="apikey-location">Add to</Label>
+                            <Select
+                              value={apiKeyLocation}
+                              onValueChange={(value: any) =>
+                                setApiKeyLocation(value)
+                              }
+                            >
+                              <SelectTrigger className="w-full mt-1">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="header">Header</SelectItem>
+                                <SelectItem value="query">
+                                  Query Params
+                                </SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <Label htmlFor="apikey-key">Key</Label>
+                            <Input
+                              id="apikey-key"
+                              placeholder="Enter key name"
+                              value={apiKeyKey}
+                              onChange={(e) => setApiKeyKey(e.target.value)}
+                              className="mt-1"
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor="apikey-value">Value</Label>
+                            <Input
+                              id="apikey-value"
+                              placeholder="Enter API key"
+                              value={apiKeyValue}
+                              onChange={(e) => setApiKeyValue(e.target.value)}
+                              type="password"
+                              className="mt-1"
+                            />
+                          </div>
+                        </div>
+                      )}
                     </TabsContent>
+
+                    <TabsContent value="body" className="mt-0 space-y-4">
+                      <div>
+                        <Label htmlFor="body-type">Body Type</Label>
+                        <Select
+                          value={bodyType}
+                          onValueChange={(value: any) => setBodyType(value)}
+                        >
+                          <SelectTrigger className="w-full mt-1">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">None</SelectItem>
+                            <SelectItem value="raw">Raw (JSON/Text)</SelectItem>
+                            <SelectItem value="form-data">Form Data</SelectItem>
+                            <SelectItem value="x-www-form-urlencoded">
+                              x-www-form-urlencoded
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {bodyType === "raw" && (
+                        <Textarea
+                          placeholder="Enter request body (JSON, text, etc.)"
+                          value={body}
+                          onChange={(e) => setBody(e.target.value)}
+                          className="h-64 resize-none font-mono text-sm"
+                        />
+                      )}
+
+                      {bodyType === "form-data" && (
+                        <div className="space-y-2">
+                          <div className="flex justify-between items-center">
+                            <Label>Form Data</Label>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => addFormDataEntry(false)}
+                            >
+                              <Plus className="w-4 h-4 mr-1" />
+                              Add
+                            </Button>
+                          </div>
+                          <div className="space-y-2 max-h-64 overflow-auto">
+                            {formData.map((entry) => (
+                              <div
+                                key={entry.id}
+                                className="flex gap-2 items-center"
+                              >
+                                <Input
+                                  placeholder="Key"
+                                  value={entry.key}
+                                  onChange={(e) =>
+                                    updateFormDataEntry(
+                                      entry.id,
+                                      "key",
+                                      e.target.value,
+                                      false
+                                    )
+                                  }
+                                  className="flex-1"
+                                />
+                                <Input
+                                  placeholder="Value"
+                                  value={entry.value}
+                                  onChange={(e) =>
+                                    updateFormDataEntry(
+                                      entry.id,
+                                      "value",
+                                      e.target.value,
+                                      false
+                                    )
+                                  }
+                                  className="flex-1"
+                                />
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() =>
+                                    removeFormDataEntry(entry.id, false)
+                                  }
+                                  disabled={formData.length === 1}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {bodyType === "x-www-form-urlencoded" && (
+                        <div className="space-y-2">
+                          <div className="flex justify-between items-center">
+                            <Label>URL Encoded Data</Label>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => addFormDataEntry(true)}
+                            >
+                              <Plus className="w-4 h-4 mr-1" />
+                              Add
+                            </Button>
+                          </div>
+                          <div className="space-y-2 max-h-64 overflow-auto">
+                            {urlEncodedData.map((entry) => (
+                              <div
+                                key={entry.id}
+                                className="flex gap-2 items-center"
+                              >
+                                <Input
+                                  placeholder="Key"
+                                  value={entry.key}
+                                  onChange={(e) =>
+                                    updateFormDataEntry(
+                                      entry.id,
+                                      "key",
+                                      e.target.value,
+                                      true
+                                    )
+                                  }
+                                  className="flex-1"
+                                />
+                                <Input
+                                  placeholder="Value"
+                                  value={entry.value}
+                                  onChange={(e) =>
+                                    updateFormDataEntry(
+                                      entry.id,
+                                      "value",
+                                      e.target.value,
+                                      true
+                                    )
+                                  }
+                                  className="flex-1"
+                                />
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() =>
+                                    removeFormDataEntry(entry.id, true)
+                                  }
+                                  disabled={urlEncodedData.length === 1}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </TabsContent>
+
                     <TabsContent value="params" className="h-full mt-0">
                       <div className="text-sm text-muted-foreground">
                         Query parameters will be parsed from the URL
