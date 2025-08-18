@@ -62,6 +62,10 @@ const METHOD_COLORS = {
     "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300",
 };
 
+type AuthType = "none" | "bearer" | "basic" | "apikey";
+type ApiKeyLocation = "header" | "query";
+type BodyType = "none" | "raw" | "form-data" | "x-www-form-urlencoded";
+
 export function ApiTester() {
   const [method, setMethod] = useState("GET");
   const [url, setUrl] = useState("");
@@ -72,21 +76,18 @@ export function ApiTester() {
   );
   const [body, setBody] = useState("");
 
-  const [authType, setAuthType] = useState<
-    "none" | "bearer" | "basic" | "apikey"
-  >("none");
+  const [authType, setAuthType] = useState<AuthType>("none");
   const [bearerToken, setBearerToken] = useState("");
   const [basicUsername, setBasicUsername] = useState("");
   const [basicPassword, setBasicPassword] = useState("");
   const [apiKeyKey, setApiKeyKey] = useState("");
   const [apiKeyValue, setApiKeyValue] = useState("");
-  const [apiKeyLocation, setApiKeyLocation] = useState<"header" | "query">(
+  const [apiKeyLocation, setApiKeyLocation] = useState<ApiKeyLocation>(
     "header"
   );
 
-  const [bodyType, setBodyType] = useState<
-    "none" | "raw" | "form-data" | "x-www-form-urlencoded"
-  >("none");
+  const [bodyType, setBodyType] = useState<BodyType>("none");
+
   const [formData, setFormData] = useState<FormDataEntry[]>([
     { id: "1", key: "", value: "", type: "text" },
   ]);
@@ -213,7 +214,11 @@ export function ApiTester() {
             });
             requestOptions.body = formDataBody;
             // Remove content-type header to let browser set it with boundary
-            delete (requestOptions.headers as any)["Content-Type"];
+            if (requestOptions.headers) {
+              delete (requestOptions.headers as Record<string, string>)[
+                "Content-Type"
+              ];
+            }
             break;
           case "x-www-form-urlencoded":
             const urlEncodedBody = new URLSearchParams();
@@ -223,8 +228,11 @@ export function ApiTester() {
               }
             });
             requestOptions.body = urlEncodedBody.toString();
-            (requestOptions.headers as any)["Content-Type"] =
-              "application/x-www-form-urlencoded";
+            if (requestOptions.headers) {
+              (requestOptions.headers as Record<string, string>)[
+                "Content-Type"
+              ] = "application/x-www-form-urlencoded";
+            }
             break;
         }
       }
@@ -452,7 +460,7 @@ export function ApiTester() {
                         <Label htmlFor="auth-type">Authorization Type</Label>
                         <Select
                           value={authType}
-                          onValueChange={(value: any) => setAuthType(value)}
+                          onValueChange={(value) => setAuthType(value as AuthType)}
                         >
                           <SelectTrigger className="w-full mt-1">
                             <SelectValue />
@@ -512,8 +520,8 @@ export function ApiTester() {
                             <Label htmlFor="apikey-location">Add to</Label>
                             <Select
                               value={apiKeyLocation}
-                              onValueChange={(value: any) =>
-                                setApiKeyLocation(value)
+                              onValueChange={(value) =>
+                                setApiKeyLocation(value as ApiKeyLocation)
                               }
                             >
                               <SelectTrigger className="w-full mt-1">
@@ -557,7 +565,7 @@ export function ApiTester() {
                         <Label htmlFor="body-type">Body Type</Label>
                         <Select
                           value={bodyType}
-                          onValueChange={(value: any) => setBodyType(value)}
+                          onValueChange={(value) => setBodyType(value as BodyType)}
                         >
                           <SelectTrigger className="w-full mt-1">
                             <SelectValue />
