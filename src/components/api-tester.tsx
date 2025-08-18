@@ -3,6 +3,7 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Select,
@@ -13,11 +14,8 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
 import {
-  ChevronRight,
   Clock,
-  Folder,
   History,
   Play,
   Plus,
@@ -332,7 +330,6 @@ export function ApiTester() {
         <div className="flex-1 overflow-hidden">
           <ScrollArea className="h-full">
             <div className="p-4">
-
               <div className="flex items-center gap-2 mb-3">
                 <History className="w-4 h-4 text-muted-foreground" />
                 <span className="text-sm font-medium text-sidebar-foreground">
