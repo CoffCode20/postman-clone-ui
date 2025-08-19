@@ -38,6 +38,7 @@ interface FormDataEntry {
   key: string;
   value: string;
   type: "text" | "file";
+  files?: File[];
 }
 
 const HTTP_METHODS = [
@@ -144,7 +145,7 @@ export function ApiTester() {
   const updateFormDataEntry = (
     id: string,
     field: keyof FormDataEntry,
-    value: string,
+    value: string | File | File[],
     isUrlEncoded = false
   ) => {
     const updateFn = (prev: FormDataEntry[]) =>
@@ -217,8 +218,14 @@ export function ApiTester() {
           case "form-data":
             const formDataBody = new FormData();
             formData.forEach((entry) => {
-              if (entry.key && entry.value) {
-                formDataBody.append(entry.key, entry.value);
+              if (entry.key) {
+                if (entry.type === "file" && entry.files) {
+                  entry.files.forEach((file) => {
+                    formDataBody.append(entry.key, file);
+                  });
+                } else {
+                  formDataBody.append(entry.key, entry.value);
+                }
               }
             });
             requestOptions.body = formDataBody;
@@ -633,19 +640,69 @@ export function ApiTester() {
                                   }
                                   className="flex-1"
                                 />
-                                <Input
-                                  placeholder="Value"
-                                  value={entry.value}
-                                  onChange={(e) =>
-                                    updateFormDataEntry(
-                                      entry.id,
-                                      "value",
-                                      e.target.value,
-                                      false
-                                    )
-                                  }
-                                  className="flex-1"
-                                />
+                                <div className="flex-1 flex gap-2">
+                                  <Select
+                                    value={entry.type}
+                                    onValueChange={(value) =>
+                                      updateFormDataEntry(
+                                        entry.id,
+                                        "type",
+                                        value as "text" | "file",
+                                        false
+                                      )
+                                    }
+                                  >
+                                    <SelectTrigger className="w-24">
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="text">Text</SelectItem>
+                                      <SelectItem value="file">File</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                  {entry.type === "text" ? (
+                                    <Input
+                                      placeholder="Value"
+                                      value={entry.value}
+                                      onChange={(e) =>
+                                        updateFormDataEntry(
+                                          entry.id,
+                                          "value",
+                                          e.target.value,
+                                          false
+                                        )
+                                      }
+                                      className="flex-1"
+                                    />
+                                  ) : (
+                                    <Input
+                                      type="file"
+                                      multiple
+                                      onChange={(e) => {
+                                        const files = e.target.files;
+                                        if (files) {
+                                          const fileArray = Array.from(files);
+                                          updateFormDataEntry(
+                                            entry.id,
+                                            "value",
+                                            fileArray
+                                              .map((file) => file.name)
+                                              .join(", "),
+                                            false
+                                          );
+                                          // Also store the file object itself
+                                          updateFormDataEntry(
+                                            entry.id,
+                                            "files",
+                                            fileArray as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+                                            false
+                                          );
+                                        }
+                                      }}
+                                      className="flex-1"
+                                    />
+                                  )}
+                                </div>
                                 <Button
                                   type="button"
                                   variant="ghost"
