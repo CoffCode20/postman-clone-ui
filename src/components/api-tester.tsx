@@ -72,7 +72,9 @@ export function ApiTester() {
   const [url, setUrl] = useState("");
   const [response, setResponse] = useState("");
   const [loading, setLoading] = useState(false);
-  const [headers, setHeaders] = useState<{ [key: string]: string }>({});
+  const [headers, setHeaders] = useState<{ [key: string]: string }>({
+    Accept: "application/json",
+  });
   const [body, setBody] = useState("");
 
   const [authType, setAuthType] = useState<AuthType>("none");
@@ -95,7 +97,7 @@ export function ApiTester() {
           newHeaders["Content-Type"] = "application/json";
           break;
         case "form-data":
-          delete newHeaders["Content-Type"]; // Let browser set it with boundary
+          newHeaders["Content-Type"] = "multipart/form-data";
           break;
         case "x-www-form-urlencoded":
           newHeaders["Content-Type"] = "application/x-www-form-urlencoded";
