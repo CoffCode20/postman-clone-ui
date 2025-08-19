@@ -245,7 +245,6 @@ export function ApiTester() {
             });
             requestOptions.body = formDataBody;
             // Remove content-type header to let browser set it with boundary
-            delete (requestOptions.headers as any)["Content-Type"];
             if (requestOptions.headers) {
               delete (requestOptions.headers as Record<string, string>)[
                 "Content-Type"
@@ -718,7 +717,7 @@ export function ApiTester() {
                                           updateFormDataEntry(
                                             entry.id,
                                             "files",
-                                            fileArray as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+                                            fileArray,
                                             false
                                           );
                                         }
