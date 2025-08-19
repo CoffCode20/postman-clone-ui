@@ -23,7 +23,7 @@ import {
   Settings,
   Trash2,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 interface ApiRequest {
   id: string;
@@ -71,9 +71,7 @@ export function ApiTester() {
   const [url, setUrl] = useState("");
   const [response, setResponse] = useState("");
   const [loading, setLoading] = useState(false);
-  const [headers, setHeaders] = useState(
-    '{\n  "Content-Type": "application/json",\n  "Accept": "application/json"\n}'
-  );
+  const [headers, setHeaders] = useState<{ [key: string]: string }>({});
   const [body, setBody] = useState("");
 
   const [authType, setAuthType] = useState<AuthType>("none");
@@ -82,11 +80,34 @@ export function ApiTester() {
   const [basicPassword, setBasicPassword] = useState("");
   const [apiKeyKey, setApiKeyKey] = useState("");
   const [apiKeyValue, setApiKeyValue] = useState("");
-  const [apiKeyLocation, setApiKeyLocation] = useState<ApiKeyLocation>(
-    "header"
-  );
+  const [apiKeyLocation, setApiKeyLocation] =
+    useState<ApiKeyLocation>("header");
 
   const [bodyType, setBodyType] = useState<BodyType>("none");
+
+  useEffect(() => {
+    setHeaders((prevHeaders) => {
+      const newHeaders = { ...prevHeaders };
+
+      switch (bodyType) {
+        case "raw":
+          newHeaders["Content-Type"] = "application/json";
+          break;
+        case "form-data":
+          delete newHeaders["Content-Type"]; // Let browser set it with boundary
+          break;
+        case "x-www-form-urlencoded":
+          newHeaders["Content-Type"] = "application/x-www-form-urlencoded";
+          break;
+        case "none":
+        default:
+          newHeaders["Content-Type"] = "application/json";
+          break;
+      }
+
+      return newHeaders;
+    });
+  }, [bodyType]);
 
   const [formData, setFormData] = useState<FormDataEntry[]>([
     { id: "1", key: "", value: "", type: "text" },
@@ -161,36 +182,28 @@ export function ApiTester() {
       const requestOptions: RequestInit = {
         method,
         headers: (() => {
-          try {
-            const parsedHeaders = headers ? JSON.parse(headers) : {};
+          const newHeaders = { ...headers };
 
-            switch (authType) {
-              case "bearer":
-                if (bearerToken) {
-                  parsedHeaders.Authorization = `Bearer ${bearerToken}`;
-                }
-                break;
-              case "basic":
-                if (basicUsername && basicPassword) {
-                  const credentials = btoa(`${basicUsername}:${basicPassword}`);
-                  parsedHeaders.Authorization = `Basic ${credentials}`;
-                }
-                break;
-              case "apikey":
-                if (apiKeyKey && apiKeyValue && apiKeyLocation === "header") {
-                  parsedHeaders[apiKeyKey] = apiKeyValue;
-                }
-                break;
-            }
-
-            return parsedHeaders;
-          } catch {
-            setResponse(
-              JSON.stringify({ error: "Invalid headers JSON" }, null, 2)
-            );
-            setLoading(false);
-            throw new Error("Invalid headers");
+          switch (authType) {
+            case "bearer":
+              if (bearerToken) {
+                newHeaders.Authorization = `Bearer ${bearerToken}`;
+              }
+              break;
+            case "basic":
+              if (basicUsername && basicPassword) {
+                const credentials = btoa(`${basicUsername}:${basicPassword}`);
+                newHeaders.Authorization = `Basic ${credentials}`;
+              }
+              break;
+            case "apikey":
+              if (apiKeyKey && apiKeyValue && apiKeyLocation === "header") {
+                newHeaders[apiKeyKey] = apiKeyValue;
+              }
+              break;
           }
+
+          return newHeaders;
         })(),
       };
 
@@ -198,11 +211,7 @@ export function ApiTester() {
         switch (bodyType) {
           case "raw":
             if (body) {
-              try {
-                requestOptions.body = JSON.stringify(JSON.parse(body));
-              } catch {
-                requestOptions.body = body;
-              }
+              requestOptions.body = body;
             }
             break;
           case "form-data":
@@ -213,12 +222,7 @@ export function ApiTester() {
               }
             });
             requestOptions.body = formDataBody;
-            // Remove content-type header to let browser set it with boundary
-            if (requestOptions.headers) {
-              delete (requestOptions.headers as Record<string, string>)[
-                "Content-Type"
-              ];
-            }
+
             break;
           case "x-www-form-urlencoded":
             const urlEncodedBody = new URLSearchParams();
@@ -228,11 +232,7 @@ export function ApiTester() {
               }
             });
             requestOptions.body = urlEncodedBody.toString();
-            if (requestOptions.headers) {
-              (requestOptions.headers as Record<string, string>)[
-                "Content-Type"
-              ] = "application/x-www-form-urlencoded";
-            }
+
             break;
         }
       }
@@ -449,8 +449,14 @@ export function ApiTester() {
                     <TabsContent value="headers" className="h-full mt-0">
                       <Textarea
                         placeholder="Enter headers as JSON"
-                        value={headers}
-                        onChange={(e) => setHeaders(e.target.value)}
+                        value={JSON.stringify(headers, null, 2)}
+                        onChange={(e) => {
+                          try {
+                            setHeaders(JSON.parse(e.target.value));
+                          } catch {
+                            // Handle invalid JSON
+                          }
+                        }}
                         className="h-full resize-none font-mono text-sm"
                       />
                     </TabsContent>
@@ -460,7 +466,9 @@ export function ApiTester() {
                         <Label htmlFor="auth-type">Authorization Type</Label>
                         <Select
                           value={authType}
-                          onValueChange={(value) => setAuthType(value as AuthType)}
+                          onValueChange={(value) =>
+                            setAuthType(value as AuthType)
+                          }
                         >
                           <SelectTrigger className="w-full mt-1">
                             <SelectValue />
@@ -565,7 +573,9 @@ export function ApiTester() {
                         <Label htmlFor="body-type">Body Type</Label>
                         <Select
                           value={bodyType}
-                          onValueChange={(value) => setBodyType(value as BodyType)}
+                          onValueChange={(value) =>
+                            setBodyType(value as BodyType)
+                          }
                         >
                           <SelectTrigger className="w-full mt-1">
                             <SelectValue />
