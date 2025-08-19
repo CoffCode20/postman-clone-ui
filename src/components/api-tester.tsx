@@ -86,7 +86,7 @@ export function ApiTester() {
   const [apiKeyLocation, setApiKeyLocation] =
     useState<ApiKeyLocation>("header");
 
-  const [bodyType, setBodyType] = useState<BodyType>("none");
+  const [bodyType, setBodyType] = useState<BodyType>();
 
   useEffect(() => {
     setHeaders((prevHeaders) => {
@@ -94,10 +94,13 @@ export function ApiTester() {
 
       switch (bodyType) {
         case "raw":
-          newHeaders["Content-Type"] = "application/json";
+          // Don't automatically set to JSON - let the send handler decide
+          if (!newHeaders["Content-Type"]) {
+            newHeaders["Content-Type"] = "application/json";
+          }
           break;
         case "form-data":
-          newHeaders["Content-Type"] = "multipart/form-data";
+          delete newHeaders["Content-Type"];
           break;
         case "x-www-form-urlencoded":
           newHeaders["Content-Type"] = "application/x-www-form-urlencoded";
@@ -213,8 +216,18 @@ export function ApiTester() {
       if (method !== "GET" && method !== "HEAD") {
         switch (bodyType) {
           case "raw":
-            if (body) {
-              requestOptions.body = body;
+            try {
+              requestOptions.body = JSON.stringify(JSON.parse(body));
+              requestOptions.headers = {
+                ...requestOptions.headers,
+                "Content-Type": "application/json",
+              };
+            } catch (err) {
+              setResponse(
+                JSON.stringify({ error: "Invalid JSON body" }, null, 2)
+              );
+              setLoading(false);
+              return;
             }
             break;
           case "form-data":
@@ -225,13 +238,19 @@ export function ApiTester() {
                   entry.files.forEach((file) => {
                     formDataBody.append(entry.key, file);
                   });
-                } else {
+                } else if (entry.type === "text" && entry.value) {
                   formDataBody.append(entry.key, entry.value);
                 }
               }
             });
             requestOptions.body = formDataBody;
-
+            // Remove content-type header to let browser set it with boundary
+            delete (requestOptions.headers as any)["Content-Type"];
+            if (requestOptions.headers) {
+              delete (requestOptions.headers as Record<string, string>)[
+                "Content-Type"
+              ];
+            }
             break;
           case "x-www-form-urlencoded":
             const urlEncodedBody = new URLSearchParams();
@@ -240,6 +259,7 @@ export function ApiTester() {
                 urlEncodedBody.append(entry.key, entry.value);
               }
             });
+            console.log(urlEncodedBody.toString());
             requestOptions.body = urlEncodedBody.toString();
 
             break;
@@ -664,6 +684,7 @@ export function ApiTester() {
                                   </Select>
                                   {entry.type === "text" ? (
                                     <Input
+                                      key={`${entry.id}-text`}
                                       placeholder="Value"
                                       value={entry.value}
                                       onChange={(e) =>
@@ -678,6 +699,7 @@ export function ApiTester() {
                                     />
                                   ) : (
                                     <Input
+                                      key={`${entry.id}-file`}
                                       type="file"
                                       multiple
                                       onChange={(e) => {
