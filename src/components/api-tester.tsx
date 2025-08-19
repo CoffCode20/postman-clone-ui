@@ -743,7 +743,7 @@ export function ApiTester() {
                 </div>
                 <div className="p-6 h-full">
                   <ScrollArea className="h-full">
-                    <pre className="text-sm font-mono whitespace-pre-wrap break-words">
+                    <pre className="text-sm font-mono whitespace-pre-wrap break-all">
                       {response || 'Click "Send" to see the response here...'}
                     </pre>
                   </ScrollArea>
