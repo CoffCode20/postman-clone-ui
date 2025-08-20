@@ -33,6 +33,13 @@ interface ApiRequest {
   timestamp: Date;
 }
 
+interface QueryParam {
+  id: string;
+  key: string;
+  value: string;
+  enabled: boolean;
+}
+
 interface FormDataEntry {
   id: string;
   key: string;
@@ -86,7 +93,8 @@ export function ApiTester() {
   const [apiKeyLocation, setApiKeyLocation] =
     useState<ApiKeyLocation>("header");
 
-  const [bodyType, setBodyType] = useState<BodyType>();
+  const [bodyType, setBodyType] = useState<BodyType>("none");
+  const [history, setHistory] = useState<ApiRequest[]>([]);
 
   useEffect(() => {
     setHeaders((prevHeaders) => {
@@ -94,7 +102,6 @@ export function ApiTester() {
 
       switch (bodyType) {
         case "raw":
-          // Don't automatically set to JSON - let the send handler decide
           if (!newHeaders["Content-Type"]) {
             newHeaders["Content-Type"] = "application/json";
           }
@@ -107,7 +114,9 @@ export function ApiTester() {
           break;
         case "none":
         default:
-          newHeaders["Content-Type"] = "application/json";
+          if (!newHeaders["Content-Type"]) {
+            newHeaders["Content-Type"] = "application/json";
+          }
           break;
       }
 
@@ -122,7 +131,36 @@ export function ApiTester() {
     { id: "1", key: "", value: "", type: "text" },
   ]);
 
-  const [history, setHistory] = useState<ApiRequest[]>([]);
+  const [queryParams, setQueryParams] = useState<QueryParam[]>([
+    { id: "1", key: "", value: "", enabled: true },
+  ]);
+
+  // Query parameter functions
+  const addQueryParam = () => {
+    const newParam: QueryParam = {
+      id: Date.now().toString(),
+      key: "",
+      value: "",
+      enabled: true,
+    };
+    setQueryParams((prev) => [...prev, newParam]);
+  };
+
+  const removeQueryParam = (id: string) => {
+    setQueryParams((prev) => prev.filter((param) => param.id !== id));
+  };
+
+  const updateQueryParam = (
+    id: string,
+    field: keyof QueryParam,
+    value: string | boolean
+  ) => {
+    setQueryParams((prev) =>
+      prev.map((param) =>
+        param.id === id ? { ...param, [field]: value } : param
+      )
+    );
+  };
 
   const addFormDataEntry = (isUrlEncoded = false) => {
     const newEntry: FormDataEntry = {
@@ -165,6 +203,34 @@ export function ApiTester() {
     }
   };
 
+  // Build final URL with query parameters
+  const buildFinalUrl = (baseUrl: string) => {
+    try {
+      const urlObj = new URL(baseUrl);
+
+      // Add enabled query parameters
+      queryParams.forEach((param) => {
+        if (param.enabled && param.key && param.value) {
+          urlObj.searchParams.set(param.key, param.value);
+        }
+      });
+
+      // Add API key to query if needed
+      if (
+        authType === "apikey" &&
+        apiKeyLocation === "query" &&
+        apiKeyKey &&
+        apiKeyValue
+      ) {
+        urlObj.searchParams.set(apiKeyKey, apiKeyValue);
+      }
+
+      return urlObj.toString();
+    } catch {
+      return baseUrl;
+    }
+  };
+
   const handleSendRequest = async () => {
     setLoading(true);
     setResponse("");
@@ -185,11 +251,15 @@ export function ApiTester() {
         return;
       }
 
+      // Build final URL with query params
+      const finalUrl = buildFinalUrl(url);
+
       const requestOptions: RequestInit = {
         method,
         headers: (() => {
           const newHeaders = { ...headers };
 
+          // Apply authentication
           switch (authType) {
             case "bearer":
               if (bearerToken) {
@@ -213,21 +283,27 @@ export function ApiTester() {
         })(),
       };
 
+      // Handle request body for non-GET/HEAD requests
       if (method !== "GET" && method !== "HEAD") {
         switch (bodyType) {
           case "raw":
-            try {
-              requestOptions.body = JSON.stringify(JSON.parse(body));
-              requestOptions.headers = {
-                ...requestOptions.headers,
-                "Content-Type": "application/json",
-              };
-            } catch (err) {
-              setResponse(
-                JSON.stringify({ error: "Invalid JSON body" }, null, 2)
-              );
-              setLoading(false);
-              return;
+            if (body.trim()) {
+              try {
+                // Try to parse as JSON first
+                JSON.parse(body);
+                requestOptions.body = body;
+                requestOptions.headers = {
+                  ...requestOptions.headers,
+                  "Content-Type": "application/json",
+                };
+              } catch {
+                // If not valid JSON, send as plain text
+                requestOptions.body = body;
+                requestOptions.headers = {
+                  ...requestOptions.headers,
+                  "Content-Type": "text/plain",
+                };
+              }
             }
             break;
           case "form-data":
@@ -258,49 +334,43 @@ export function ApiTester() {
                 urlEncodedBody.append(entry.key, entry.value);
               }
             });
-            console.log(urlEncodedBody.toString());
             requestOptions.body = urlEncodedBody.toString();
-
+            requestOptions.headers = {
+              ...requestOptions.headers,
+              "Content-Type": "application/x-www-form-urlencoded",
+            };
             break;
         }
       }
 
-      let finalUrl = url;
-      if (
-        authType === "apikey" &&
-        apiKeyLocation === "query" &&
-        apiKeyKey &&
-        apiKeyValue
-      ) {
-        const urlObj = new URL(url);
-        urlObj.searchParams.set(apiKeyKey, apiKeyValue);
-        finalUrl = urlObj.toString();
-      }
-
-      // Decide whether to use proxy or not
+      // Determine if we need to use the proxy
       const hostname = parsedUrl.hostname.toLowerCase();
+      let targetUrl = finalUrl;
 
       if (
         hostname === "localhost" ||
         hostname === "127.0.0.1" ||
-        /^192\.168\./.test(hostname) || // LAN IP
-        /^10\./.test(hostname)
+        /^192\.168\./.test(hostname) ||
+        /^10\./.test(hostname) ||
+        parsedUrl.protocol === "http:"
       ) {
-        // Use proxy for local targets
-        finalUrl = `http://localhost:5001${parsedUrl.pathname}${parsedUrl.search}`;
+        // Use proxy for local/http targets
+        targetUrl = `http://localhost:5001`;
         requestOptions.headers = {
           ...requestOptions.headers,
-          "X-Target-Url": url,
+          "X-Target-Url": finalUrl,
         };
       }
 
-      console.log(`Sending request to: ${finalUrl}`, {
-        headers: requestOptions.headers,
+      console.log("Sending request:", {
+        url: targetUrl,
         method,
-        body: requestOptions.body,
+        headers: requestOptions.headers,
+        bodyType,
+        hasBody: !!requestOptions.body,
       });
 
-      const res = await fetch(finalUrl, requestOptions);
+      const res = await fetch(targetUrl, requestOptions);
 
       let rawData: string;
       try {
@@ -316,19 +386,16 @@ export function ApiTester() {
         data = rawData;
       }
 
-      setResponse(
-        JSON.stringify(
-          {
-            status: res.status,
-            statusText: res.statusText,
-            headers: Object.fromEntries(res.headers.entries()),
-            body: data,
-          },
-          null,
-          2
-        )
-      );
+      const responseData = {
+        status: res.status,
+        statusText: res.statusText,
+        headers: Object.fromEntries(res.headers.entries()),
+        body: data,
+      };
 
+      setResponse(JSON.stringify(responseData, null, 2));
+
+      // Add to history
       const newRequest: ApiRequest = {
         id: Date.now().toString(),
         name: `${method} ${parsedUrl.pathname}`,
@@ -338,6 +405,7 @@ export function ApiTester() {
       };
       setHistory((prev) => [newRequest, ...prev.slice(0, 9)]);
     } catch (error) {
+      console.error("Request error:", error);
       setResponse(
         JSON.stringify(
           { error: error instanceof Error ? error.message : "Unknown error" },
@@ -808,9 +876,73 @@ export function ApiTester() {
                     </TabsContent>
 
                     <TabsContent value="params" className="h-full mt-0">
-                      <div className="text-sm text-muted-foreground">
-                        Query parameters will be parsed from the URL
-                        automatically.
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center">
+                          <Label>Query Parameters</Label>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={addQueryParam}
+                          >
+                            <Plus className="w-4 h-4 mr-1" />
+                            Add
+                          </Button>
+                        </div>
+                        <div className="space-y-2 max-h-64 overflow-auto">
+                          {queryParams.map((param) => (
+                            <div
+                              key={param.id}
+                              className="flex gap-2 items-center"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={param.enabled}
+                                onChange={(e) =>
+                                  updateQueryParam(
+                                    param.id,
+                                    "enabled",
+                                    e.target.checked
+                                  )
+                                }
+                                className="w-4 h-4"
+                              />
+                              <Input
+                                placeholder="Key"
+                                value={param.key}
+                                onChange={(e) =>
+                                  updateQueryParam(
+                                    param.id,
+                                    "key",
+                                    e.target.value
+                                  )
+                                }
+                                className="flex-1"
+                              />
+                              <Input
+                                placeholder="Value"
+                                value={param.value}
+                                onChange={(e) =>
+                                  updateQueryParam(
+                                    param.id,
+                                    "value",
+                                    e.target.value
+                                  )
+                                }
+                                className="flex-1"
+                              />
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => removeQueryParam(param.id)}
+                                disabled={queryParams.length === 1}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     </TabsContent>
                   </div>
